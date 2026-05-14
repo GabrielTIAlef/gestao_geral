@@ -54,10 +54,6 @@ Gestta API / Notion API
        Views SQL
             ↓
         Power BI
-            ↓
-   Selenium RPA
-            ↓
-     Slack Alerts
 ```
 
 ---
@@ -304,11 +300,3 @@ Durante o desenvolvimento deste projeto foram trabalhados temas como:
 - Monitoramento operacional;
 - Arquitetura de dados;
 - Processamento e normalização de grandes volumes de dados.
-
----
-
-🌐 Portfólio:
-https://gabrieltialef.github.io/Portf-lio/
-
-💼 LinkedIn:
-(adicionar link)
