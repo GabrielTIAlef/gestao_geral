@@ -219,8 +219,8 @@ Painel voltado ao acompanhamento dos fluxos fiscais e operacionais do time cont�
 
 | Métrica | Antes | Depois |
 |---|---|---|
-| Atualização dos painéis | 2h–3h | < 5 minutos |
-| Dependência de planilhas manuais | Alta | Baixa |
+| Atualização dos painéis | 5 dias | < 5 minutos |
+| Dependência de planilhas manuais | Alta | Nenhuma |
 | Centralização de dados | Parcial | Completa |
 | Atualização operacional | Manual | Automatizada |
 | Monitoramento de erros | Limitado | Alertas via Slack |
