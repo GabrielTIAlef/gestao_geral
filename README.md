@@ -47,9 +47,6 @@ Gestta / Notion
 - Visão por time, responsável, status, prazo e cliente.
 - Apoio à tomada de decisão operacional.
 
-## Screenshots
-
-![PostgreSQL](docs/screenshots/postgres_modelo.png)
 
 ## Segurança
 
