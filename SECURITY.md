@@ -13,7 +13,7 @@
 O provisionamento manual substitui a antiga captura por interface e clipboard.
 O token continua sendo armazenado em texto: não compartilhe o arquivo.
 As exportações podem conter dados pessoais, fiscais, nomes e links de documentos; não publique dados reais.
-As regras operacionais e nomes de campos ainda precisam de revisão de autorização antes de uso como portfólio.
+Os checklists e campos específicos desta versão pública foram substituídos por exemplos fictícios; não correspondem à configuração de uma operação real.
 
 ## Credenciais históricas
 Uma senha PostgreSQL estava presente em versões anteriores de três scripts.

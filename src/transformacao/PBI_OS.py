@@ -199,7 +199,7 @@ def criar_views(engine):
                     'Etapa demonstrativa 11',
                     'Etapa demonstrativa 12'
                 )
-              AND g."data_criação_completa" >= DATE '2025-07-01'
+              AND g."data_criação_completa" >= DATE '2000-01-01'
               AND EXISTS (
                   SELECT 1
                   FROM public.gestta_relatorios g2
@@ -218,7 +218,7 @@ def criar_views(engine):
             WHERE
                 "tarefa__subtipo" = 'Atividade demonstrativa'
                 AND
-                "data_criação_completa" > '2026-01-28';
+                "data_criação_completa" > '2000-01-01';
         """))
     print("✅ Views bi_operacional criadas.")
 

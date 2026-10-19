@@ -1,5 +1,7 @@
 # Gestão Geral BI
 
+> Versão pública de demonstração: checklists, campos específicos e filtros foram substituídos por exemplos fictícios. Use dados sintéticos e configure os nomes das propriedades da sua própria base antes de executar.
+
 > 🔹 Solução completa de automação analítica e Business Intelligence para acompanhamento operacional, gestão de tarefas, onboarding de clientes e monitoramento de equipes em tempo quase real.
 
 ---
