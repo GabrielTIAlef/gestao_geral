@@ -6,8 +6,8 @@ Este procedimento reproduz o ETL com dados inteiramente fictícios. Não usa con
 O PostgreSQL é real, mas o cluster é criado apenas para testes, escuta em 127.0.0.1 e é encerrado no final.
 Não instala serviço do Windows nem utiliza um banco já existente.
 
-Ambiente validado: Windows x86-64, Python 3.12.14 e PostgreSQL 18.6.
-As versões Python estão fixadas em requirements-lock.txt. Esse arquivo representa este ambiente validado; outras plataformas/versões precisam de validação própria.
+Ambiente local validado: Windows x86-64, Python 3.12.14 e PostgreSQL 18.6.
+As dependências estão fixadas em requirements-lock.txt. Após esta etapa, a suíte também foi aprovada no GitHub/Linux com Python 3.12 e PostgreSQL 18; veja [testes automáticos](TESTES_AUTOMATICOS.md). O procedimento portátil abaixo continua específico para Windows.
 
 ## Instalação do zero no Windows
 
@@ -115,6 +115,6 @@ Asserções cobrem as quatro views originais, repetição da carga, CNPJ textual
 - APIs corporativas e sessão real de navegador não foram acessadas.
 - Solicitar refresh Power BI continua diferente de confirmar sua conclusão.
 - Não há medição de desempenho com volume produtivo.
-- PostgreSQL anterior ao 18.6, Linux e macOS não foram validados nesta etapa.
+- O procedimento portátil foi validado no Windows. Linux tem validação posterior pelo CI; macOS e versões anteriores do PostgreSQL não foram validados por essas evidências.
 - Migração de banco preexistente incompatível continua exigindo análise explícita.
 - A instalação das dependências exige acesso ao índice de pacotes; somente a demonstração e os testes funcionam sem APIs externas após a instalação.

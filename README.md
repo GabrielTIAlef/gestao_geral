@@ -1,300 +1,159 @@
 # Gestão Geral BI
 
-> Versão pública de demonstração: checklists, campos específicos e filtros foram substituídos por exemplos fictícios. Use dados sintéticos e configure os nomes das propriedades da sua própria base antes de executar.
+[![Testes Python e PostgreSQL](https://github.com/GabrielTIAlef/gestao_geral/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/GabrielTIAlef/gestao_geral/actions/workflows/tests.yml)
 
-> 🔹 Solução completa de automação analítica e Business Intelligence para acompanhamento operacional, gestão de tarefas, onboarding de clientes e monitoramento de equipes em tempo quase real.
+Pipeline de dados operacionais em **Python e PostgreSQL**: integra tarefas e
+cadastros de clientes, valida as fontes e publica tabelas, views SQL e arquivos
+para análise. Inclui demonstração com dados fictícios, testes de falhas e
+integração contínua.
 
----
+Esta versão pública utiliza nomes de etapas, filtros e registros demonstrativos.
+É possível avaliar o ETL sem contas de Gestta, Notion, Slack ou Power BI.
 
-# Visão Geral
+## Problema e objetivo
 
-Este projeto foi desenvolvido com o objetivo de centralizar, automatizar e estruturar dados operacionais de uma empresa contábil utilizando Python, PostgreSQL, APIs REST, Power BI e RPA.
+Dados distribuídos entre ferramentas dificultam relacionar tarefas e clientes e
+construir uma base analítica consistente. O projeto centraliza essas fontes em
+um fluxo de extração, transformação e carga, com validações antes de substituir
+os dados publicados.
 
-A solução integra múltiplos sistemas corporativos — principalmente Gestta e Notion — permitindo acompanhamento operacional em tempo quase real, com foco em:
+O foco desta entrega é a confiabilidade da base para BI. O repositório não
+inclui arquivos `.pbix`, medidas DAX ou capturas de dashboards. Não apresenta
+métricas comprovadas de economia de tempo ou desempenho produtivo.
 
-- Gestão de tarefas;
-- Gestão de equipes;
-- Acompanhamento operacional;
-- Controle de onboarding;
-- Monitoramento de SLA;
-- Centralização de dados;
-- Automação de processos analíticos;
-- Redução de trabalho manual.
+## Arquitetura
 
----
-
-# Problema de Negócio
-
-A operação precisava acompanhar milhares de tarefas e processos internos diariamente, porém existiam alguns desafios:
-
-- As ferramentas utilizadas não possuíam APIs públicas completas;
-- Existia alta dependência de processos manuais;
-- Atualizações dos painéis eram lentas;
-- Não havia centralização analítica;
-- Existia dificuldade para acompanhar gargalos operacionais;
-- Os dados estavam distribuídos entre múltiplas plataformas.
-
-Além disso, a empresa buscava:
-
-- Menor custo possível;
-- Alta frequência de atualização;
-- Visão operacional e estratégica;
-- Gestão individual de colaboradores;
-- Monitoramento de fluxos críticos.
-
----
-
-# Arquitetura da Solução
-
-```txt
-Gestta API / Notion API
-            ↓
-      Python ETL
-            ↓
-      PostgreSQL
-            ↓
-       Views SQL
-            ↓
-        Power BI
+```mermaid
+flowchart TD
+    G[Gestta: tarefas e checklists] --> P[Pipeline Python]
+    N[Notion: cadastro de clientes] --> P
+    F[Fontes fictícias da demonstração] --> P
+    P --> V[Validação e transformação com pandas]
+    V --> DB[PostgreSQL: tabelas e views em uma transação]
+    DB --> A[Publicação dos arquivos preparados: CSV, JSON e Excel]
+    A --> M[Manifesto de execução publicado por último]
+    M -. opção explícita .-> B[Solicitação de refresh Power BI via Selenium]
 ```
 
----
+As fontes fictícias substituem os coletores reais na demonstração. Os arquivos
+são preparados antes da carga, mas publicados depois do commit do banco.
+**Não há transação distribuída** entre PostgreSQL e sistema de arquivos.
 
-# Componentes Técnicos
+## Decisões de engenharia
 
-## `gestta_relatorios.py`
+| Necessidade | Implementação |
+| --- | --- |
+| Integrar fontes da mesma execução | Pipeline coleta Notion e Gestta; reprocessamento de CSV exige manifesto com hashes válidos. |
+| Evitar lotes parciais silenciosos | Falhas de extração, contratos inesperados, chaves inválidas e lotes totais vazios interrompem a carga. |
+| Preservar tabelas e dependências | Schema validado, `DELETE` e inserção na mesma transação; views sem `DROP ... CASCADE`. |
+| Evitar cargas concorrentes | Advisory locks no PostgreSQL protegem execução e publicação. |
+| Preservar zeros iniciais | CNPJ como texto; entrada numérica é rejeitada, sem tentar reconstruir o identificador. |
+| Detectar arquivos incompatíveis | Arquivos temporários e manifesto com SHA-256 publicado por último. |
+| Acompanhar falhas | Logs por etapa, contagens, manifesto e testes de rollback. |
 
-Script responsável pela coleta automatizada dos relatórios operacionais do Gestta.
+A integração principal usa `LEFT JOIN` das tarefas com o cadastro Notion pelo
+código do cliente. Exige chave única no cadastro e mantém tarefas sem
+correspondência, registrando sua contagem.
 
-Como o sistema não disponibiliza API pública oficial para todas as necessidades operacionais, foi desenvolvido um fluxo utilizando requisições diretamente aos endpoints da plataforma.
+## Demonstração local
 
-### Principais responsabilidades:
-- Coletar tarefas por períodos semestrais;
-- Realizar normalização dos dados;
-- Consolidar grandes volumes de informações;
-- Gerar arquivos CSV e JSON;
-- Criar logs operacionais;
-- Enviar alertas via Slack;
-- Preparar os dados para ingestão no PostgreSQL.
+Pré-requisitos deste roteiro: **Windows, Python 3.12 e binários portáteis do
+PostgreSQL 18.6**. Consulte o [guia de reprodução](docs/REPRODUCAO.md) para obter
+e localizar os binários. Na raiz do repositório, em PowerShell:
 
-### Tecnologias utilizadas:
-- `requests`
-- `pandas`
-- `logging`
-- `json`
-- `pathlib`
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
+.\.venv\Scripts\python.exe -m pip check
 
----
-
-## `base_notion.py`
-
-Script responsável pela integração com a API oficial do Notion.
-
-A rotina extrai propriedades dinâmicas da base utilizada pela operação, tratando diferentes tipos de dados e convertendo-os em estrutura relacional.
-
-### Principais responsabilidades:
-- Extrair dados do Notion;
-- Tratar propriedades complexas (`relation`, `people`, `date`, `status`);
-- Normalizar os dados;
-- Sanitizar colunas de data;
-- Criar e atualizar tabelas automaticamente;
-- Inserir dados tratados no PostgreSQL.
-
-### Tecnologias utilizadas:
-- `requests`
-- `pandas`
-- `sqlalchemy`
-- `dotenv`
-
----
-
-## `operacional_bd.py`
-
-Responsável pelo processo principal de ETL e estruturação analítica.
-
-Este módulo realiza o tratamento das bases, cria tabelas relacionais, views analíticas e integra dados do Gestta e Notion.
-
-### Principais responsabilidades:
-- Limpeza e transformação dos dados;
-- Padronização de colunas;
-- Tradução de status operacionais;
-- Conversão de datas;
-- Criação de views SQL;
-- Integração entre tabelas;
-- Exportação de bases tratadas.
-
-### Principais views:
-- `bi_final`
-- `workflow_cs`
-
-### Tecnologias utilizadas:
-- `pandas`
-- `sqlalchemy`
-- `postgresql`
-
----
-
-## `cs_checklist.py`
-
-Script desenvolvido para monitoramento do processo de onboarding de clientes.
-
-A solução consulta tarefas específicas do fluxo de entrada de clientes e valida automaticamente a execução de cada etapa.
-
-### Principais responsabilidades:
-- Consultar tarefas do onboarding;
-- Validar checklist operacional;
-- Ler etapas via API;
-- Identificar gargalos;
-- Estruturar análises de eficiência operacional.
-
-### Tecnologias utilizadas:
-- `requests`
-- `pandas`
-- `sqlalchemy`
-
----
-
-## `rpa_powerbi.py`
-
-RPA desenvolvida utilizando Selenium para atualização automática dos datasets no Power BI Web.
-
-A solução simula interações no navegador e executa automaticamente o processo de atualização dos painéis.
-
-### Principais responsabilidades:
-- Abrir Power BI Web;
-- Localizar datasets específicos;
-- Executar atualização automática;
-- Trabalhar em modo headless;
-- Enviar alertas de sucesso e erro via Slack.
-
-### Tecnologias utilizadas:
-- `selenium`
-- `webdriver`
-- `slack webhook`
-
----
-
-# Dashboards Desenvolvidos
-
-## Operacional
-
-Painel voltado à gestão operacional de tarefas e equipes.
-
-### Principais análises:
-- Quantidade de tarefas;
-- Status operacionais;
-- SLA;
-- Produtividade;
-- Performance individual;
-- Performance por setor;
-- Acompanhamento temporal;
-- Controle de atrasos.
-
----
-
-## Atendimento
-
-Painel focado no acompanhamento da criação de tarefas e atendimento operacional.
-
-### Principais análises:
-- Volume de demandas;
-- Tempo de resposta;
-- Criação de tarefas;
-- Fluxo operacional;
-- Gestão do time de atendimento.
-
----
-
-## Apuração
-
-Painel voltado ao acompanhamento dos fluxos fiscais e operacionais do time contábil.
-
-### Principais análises:
-- Status de etapas;
-- Fluxos pendentes;
-- Processos críticos;
-- Gargalos operacionais.
-
----
-
-# Resultados Obtidos
-
-| Métrica | Antes | Depois |
-|---|---|---|
-| Atualização dos painéis | 5 dias | < 5 minutos |
-| Dependência de planilhas manuais | Alta | Nenhuma |
-| Centralização de dados | Parcial | Completa |
-| Atualização operacional | Manual | Automatizada |
-| Monitoramento de erros | Limitado | Alertas via Slack |
-
----
-
-# Stack Utilizada
-
-## Dados & Engenharia
-- Python
-- PostgreSQL
-- SQLAlchemy
-- Pandas
-- APIs REST
-- ETL / ELT
-
-## BI & Analytics
-- Power BI
-- DAX
-- Modelagem Relacional
-- Dashboards Operacionais
-
-## Automação
-- Selenium
-- RPA
-- Slack Webhooks
-- Windows Task Scheduler
-
----
-
-# Estrutura do Projeto
-
-```txt
-gestao-geral-bi/
-│
-├── src/
-│   ├── extract/
-│   ├── transform/
-│   ├── automation/
-│   └── utils/
-│
-├── sql/
-├── docs/
-├── samples/
-│
-├── requirements.txt
-├── .env.example
-├── .gitignore
-└── README.md
+# Ajuste para o diretório bin do PostgreSQL que você extraiu.
+$PgBin = (Resolve-Path '.local-test\runtime\pgsql\bin').Path
+.\.venv\Scripts\python.exe -X utf8 scripts/validate_postgres.py --pg-bin "$PgBin" --demo
 ```
 
----
+O comando cria um cluster temporário local, executa a suíte completa e a
+demonstração, e encerra o servidor ao terminar. Não exige `.env` nem credenciais
+corporativas. O script não baixa PostgreSQL automaticamente.
 
-# Segurança
+A demonstração contém **5 tarefas, 2 clientes na fonte Notion e 4 itens de
+checklist**, incluindo uma tarefa sem cadastro correspondente. Gera em
+`data/demo/`: `gestta.csv`, `notion.csv`, `gestta.json`, `resultado.xlsx` e
+`latest_run.json`. Esses arquivos e o cluster local são ignorados pelo Git.
 
-A configuração deve ser fornecida por variáveis de ambiente, conforme `.env.example`.
-Nenhum segredo deve ser incluído em arquivos versionados. Consulte [SECURITY.md](SECURITY.md)
-para configuração, revogação de credenciais previamente expostas e limites desta correção.
+## Testes e evidências
 
----
+- **72 testes aprovados no Windows**, em duas instalações novas, sem falhas,
+  erros ou testes ignorados: [relatório](docs/ETAPA_3_VALIDACAO.md) e
+  [resultado registrado](docs/evidence/etapa3_resultado.json).
+- **14 testes com PostgreSQL real**, cobrindo cargas, views, rollback de dados
+  e DDL, concorrência, CNPJ textual e fluxo com HTTP simulado. Os demais cobrem
+  transformação, configuração e tratamento de falhas.
+- **Execução aprovada no GitHub/Linux** após a integração do CI:
+  [registro da execução](https://github.com/GabrielTIAlef/gestao_geral/actions/runs/39342727864).
+  Novas propostas e envios à `main` executam a suíte com PostgreSQL obrigatório;
+  consulte [testes automáticos](docs/TESTES_AUTOMATICOS.md).
 
-# Aprendizados e Competências Desenvolvidas
+Para executar somente os testes disponíveis sem iniciar PostgreSQL:
 
-Durante o desenvolvimento deste projeto foram trabalhados temas como:
+```powershell
+.\.venv\Scripts\python.exe -X utf8 scripts/run_tests.py
+```
 
-- Engenharia de dados;
-- Integração de APIs;
-- ETL;
-- Automação de processos;
-- Estruturação analítica;
-- Modelagem relacional;
-- Business Intelligence;
-- Monitoramento operacional;
-- Arquitetura de dados;
-- Processamento e normalização de grandes volumes de dados.
+Nesse modo os testes PostgreSQL são explicitamente ignorados: **não equivale à
+validação completa**. O CI usa `--require-postgresql` e falha se houver omissões.
+
+## Organização do código
+
+| Caminho | Responsabilidade |
+| --- | --- |
+| [src/pipeline.py](src/pipeline.py) | Coordena fontes, transformação, carga e saídas. |
+| [src/extracao/](src/extracao/) | Coletores Notion e Gestta, sem integrações na importação. |
+| [src/transformacao/PBI_OS.py](src/transformacao/PBI_OS.py) | Normalização, validação da junção e definições das views. |
+| [src/transformacao/CS.py](src/transformacao/CS.py) | Coleta e validação dos checklists. |
+| [src/database.py](src/database.py) | Transações, tipos, schema e locks. |
+| [src/etl_support.py](src/etl_support.py) | Validações, HTTP, arquivos temporários e manifesto. |
+| [src/automacao/](src/automacao/) | Provisionamento de token e refresh opcional pelo navegador. |
+| [examples/synthetic.py](examples/synthetic.py) | Fontes fictícias dos testes e da demonstração. |
+| [scripts/](scripts/) e [tests/](tests/) | Execução reproduzível e testes. |
+| [.github/workflows/tests.yml](.github/workflows/tests.yml) | CI com PostgreSQL descartável. |
+
+As tabelas gerenciadas são `notion_folha`, `notion_dados`,
+`gestta_relatorios` e, com checklists habilitados, `cs_check`.
+As views são `bi_final`, `"Worflow_CS"`, `worflow_cs_novo` e `bi_operacional`.
+A grafia existente foi preservada para manter compatibilidade.
+
+## Integrações reais e configuração
+
+Para avaliar o projeto, prefira a demonstração. Adaptar as integrações reais
+exige acesso autorizado, propriedades Notion compatíveis e revisão dos filtros
+demonstrativos. O Gestta consulta, por padrão, 12 trimestres: ano anterior,
+atual e seguinte.
+
+A configuração está em [.env.example](.env.example); use variáveis de ambiente
+ou `.env` local, nunca segredos versionados. O ponto de entrada coordenado é
+`python src/pipeline.py`. As opções `--checklists` e `--refresh-powerbi` são
+explícitas. A demonstração não aciona o Power BI. Consulte
+[SECURITY.md](SECURITY.md) para os cuidados de configuração e os limites da
+revisão de segurança.
+
+## Limites conhecidos
+
+- APIs reais e navegador autenticado não foram homologados nesta versão
+  pública; as evidências usam respostas simuladas e dados fictícios.
+- A automação Power BI solicita atualização, sem confirmar sua conclusão.
+- A publicação de arquivos pode falhar após o commit do banco. O erro informa
+  essa condição; o leitor de snapshots verifica manifesto e hashes.
+- Cargas substituem integralmente os dados gerenciados. Não há carga
+  incremental, histórico analítico ou benchmark com volume produtivo.
+- Schema incompatível exige migração explícita; não há migração automática
+  de um banco de produção preexistente.
+- Windows e GitHub/Linux têm evidências de execução. macOS e outras versões
+  de Python/PostgreSQL não estão cobertos por essas validações.
+
+## Competências demonstradas
+
+Integração de APIs REST, pandas, SQL analítico, PostgreSQL transacional,
+modelagem de chaves e tipos, testes com mocks e banco real, configuração por
+ambiente e integração contínua. O projeto demonstra uma base de engenharia
+analítica e BI; não implementa modelos preditivos ou experimentos de ciência
+de dados.

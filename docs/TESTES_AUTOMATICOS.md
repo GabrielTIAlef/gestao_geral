@@ -32,11 +32,13 @@ A suíte anterior foi aprovada localmente no Windows com PostgreSQL real.
 A configuração deste fluxo passou na validação local do actionlint 1.7.12
 (sem ShellCheck ou pyflakes), na leitura do YAML e na conferência da sintaxe
 Python do resumo. Também foram conferidos os gatilhos, a permissão de leitura,
-o vínculo à interface local e a exigência dos testes PostgreSQL. A execução
-no GitHub/Linux só pode ser confirmada após publicação da proposta. Um arquivo
-de workflow, por si só, não comprova execução bem-sucedida.
+o vínculo à interface local e a exigência dos testes PostgreSQL.
+A execução no GitHub/Linux foi posteriormente aprovada após integração à
+`main`: [registro verificável](https://github.com/GabrielTIAlef/gestao_geral/actions/runs/39342727864).
+Instalação, verificação de dependências e suíte com PostgreSQL obrigatório
+foram concluídas com sucesso.
 
-Após publicar, abra a proposta e acompanhe o check **Python 3.12 e PostgreSQL 18**.
+Em cada nova proposta, acompanhe o check **Python 3.12 e PostgreSQL 18**.
 Se estiver vermelho, consulte o primeiro passo com falha antes de integrar.
 
 Este fluxo não torna o check obrigatório para merge. Essa regra depende de uma
