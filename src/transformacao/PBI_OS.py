@@ -1,3 +1,9 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from security_config import configured_path, database_url, gestta_token, required_env
+
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -9,23 +15,16 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 # Configuração e conexão ao BD
-DB_CONFIG = {
-    "usuario": "postgres",
-    "senha": "123456",
-    "host": "localhost",
-    "porta": "5432",
-    "banco": "ProjetoImport"
-}
+
 def conectar_banco():
-    url = f"postgresql+psycopg2://{DB_CONFIG['usuario']}:{DB_CONFIG['senha']}@{DB_CONFIG['host']}:{DB_CONFIG['porta']}/{DB_CONFIG['banco']}"
-    engine = create_engine(url)
+    engine = create_engine(database_url())
     try:
         with engine.connect() as conn:
             print("✅ Conexão bem-sucedida ao banco de dados.")
         return engine
     except Exception as e:
-        print(f"❌ Erro ao conectar: {e}")
-        raise
+        print("Falha na conexão ao banco.")
+        raise RuntimeError("Execução interrompida; verifique a configuração e o serviço.") from None
 
 # Ciclo começa apagando as views para dar replace nas tabelas
 def apagar_views(engine):
@@ -38,7 +37,7 @@ print("✅ Views apagadas.")
 
 # Puxa o CSV criado no script "gestta_relatorios" traz os dados do Gestta e faz as transformações necessárias na base
 def limpar_e_carregar_gestta_relatorios(engine):
-    df = pd.read_csv(r"C:\Users\Gabriel Alef\Projeto\dados\gestta_relatorios.csv", sep=',')
+    df = pd.read_csv(configured_path("GESTTA_CSV_PATH", "data/gestta_relatorios.csv"), sep=',')
     # Exclusão de colunas não usadas
     colunas_excluir = [
         "company_task.score", "owner.role", "due_iso_week", "value", "concluded_by.role",
@@ -117,7 +116,7 @@ def limpar_e_carregar_gestta_relatorios(engine):
 
 # Puxa o CSV criado no script "PBI_OS" traz os dados do Notion e faz algumas transformações
 def limpar_e_carregar_notion_dados(engine):
-    df = pd.read_csv(r"C:\Users\Gabriel Alef\Projeto\dados\base_notion.csv", sep=',', na_values=['Sem dado'], dtype_backend = "numpy_nullable")
+    df = pd.read_csv(configured_path("NOTION_CSV_PATH", "data/notion_dados.csv"), sep=',', na_values=['Sem dado'], dtype_backend = "numpy_nullable")
     # Transformação do tipo da coluna
     df['Código Domínio'] = pd.to_numeric(df['Código Domínio'], errors = 'coerce')
     # Normalização dos nomes das colunas
@@ -210,7 +209,7 @@ def criar_views(engine):
             """))
     print("✅ Views Worflow_CS criadas.")
     with engine.begin() as conn: 
-        # View usada no proejto da Ísis
+        # View de acompanhamento operacional
         conn.execute(text("""
             CREATE OR REPLACE VIEW "bi_isis" AS
             SELECT 
@@ -226,7 +225,9 @@ def criar_views(engine):
 # Exportação para Excel
 def exportar_excel(engine):
     df = pd.read_sql("SELECT * FROM bi_final", engine)
-    df.to_excel(r"C:\Users\Gabriel Alef\Projeto\dados\projeto_bi.xlsx", index=False)
+    export_path = configured_path("EXPORT_XLSX_PATH", "data/resultado.xlsx")
+    export_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_excel(export_path, index=False)
     print("✅ Exportado para Excel com sucesso.")
 
 def main():
@@ -241,7 +242,3 @@ if __name__ == "__main__":
 
 
 # In[ ]:
-
-
-
-
