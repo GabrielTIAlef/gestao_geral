@@ -1,151 +1,74 @@
+"""Coleta completa de checklists e publicação validada."""
+import logging
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from security_config import configured_path, database_url, gestta_token, required_env
-
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[2]:
-
-
-from sqlalchemy import create_engine, text
-from sqlalchemy.types import String, Text, Integer, Boolean
-from datetime import datetime
-import os
-import requests
-import json
-from pathlib import Path
 import pandas as pd
+from sqlalchemy import create_engine, text
+from database import pipeline_lock, publish_tables
+from etl_support import ETLError, request_json, require_columns
+from security_config import database_url, gestta_token
 
-# Conexão ao BD
+LOG = logging.getLogger(__name__)
+checklist = [f"Etapa demonstrativa {index:02d}" for index in range(1, 13)]
 
 
-# Tarefas específicas do CS
-checklist = [
-    'Etapa demonstrativa 01',
-    'Etapa demonstrativa 02',
-    'Etapa demonstrativa 03',
-    'Etapa demonstrativa 04',
-    'Etapa demonstrativa 05',
-    'Etapa demonstrativa 06',
-    'Etapa demonstrativa 07',
-    'Etapa demonstrativa 08',
-    'Etapa demonstrativa 09',
-    'Etapa demonstrativa 10',
-    'Etapa demonstrativa 11',
-    'Etapa demonstrativa 12',
-]
-
-# Token de conexão ao Gestta
-TOKEN = gestta_token()
-
-# Conexão e extração de dados do BD
-def conectar_banco():
-    engine = create_engine(database_url())
-    try:
-        with engine.connect() as conn:
-            print("✅ Conexão bem-sucedida ao banco de dados.")
-        return engine
-    except Exception as e:
-        print("Falha na conexão ao banco.")
-        raise RuntimeError("Execução interrompida; verifique a configuração e o serviço.") from None
 def coluna_banco(engine):
     with engine.connect() as conn:
-        df_banco = pd.read_sql(
-            text("""SELECT tarefa__nome, tarefa__id FROM public."Worflow_CS";"""), 
-            conn 
-        )
-    return df_banco
+        return pd.read_sql(text('SELECT tarefa__nome, tarefa__id FROM public."Worflow_CS"'), conn)
 
-# Conxão a API do Gestta
-def api(engine):
-    headers = {
-        "authorization": f"{TOKEN}",
-        "Accept": "application/json",
-    }
 
-    # Informações do BD
-    df_banco = coluna_banco(engine)
-    print(f"[DB] Linhas no banco: {len(df_banco)} | IDs únicos: {df_banco['tarefa__id'].nunique()}")
+def collect(targets, *, token=None, http=None):
+    require_columns(targets, ("tarefa__nome", "tarefa__id"), "CS")
+    selected = targets.loc[targets["tarefa__nome"].isin(checklist), "tarefa__id"]
+    if selected.isna().any() or selected.map(lambda value: not isinstance(value, str)).any():
+        raise ETLError("CS: identificador de tarefa inválido.")
+    ids = selected.unique().tolist()
+    if not ids:
+        raise ETLError("CS: nenhuma tarefa alvo; carga anterior preservada.")
+    headers = {"authorization": token if token is not None else gestta_token(),
+               "Accept": "application/json"}
+    rows = []
+    for task_id in ids:
+        payload = request_json("get", f"https://api.gestta.com.br/core/customer/task/{task_id}",
+                               http=http, headers=headers)
+        if isinstance(payload, dict) and "customer_task_steps" not in payload:
+            payload = payload.get("data")
+        if not isinstance(payload, dict) or not isinstance(payload.get("customer_task_steps"), list):
+            raise ETLError("CS: resposta sem lista de passos.")
+        for step in payload["customer_task_steps"]:
+            if (not isinstance(step, dict) or not isinstance(step.get("name"), str)
+                    or type(step.get("order")) is not int or type(step.get("done")) is not bool):
+                raise ETLError("CS: passo com campos ou tipos inválidos.")
+            rows.append({"id": task_id, "name": step["name"],
+                         "step_order": step["order"], "done": step["done"]})
+    frame = pd.DataFrame(rows, columns=["id", "name", "step_order", "done"])
+    if frame.empty:
+        raise ETLError("CS: lote total vazio; carga anterior preservada.")
+    if frame.duplicated(["id", "step_order"]).any():
+        raise ETLError("CS: ordem de passo duplicada por tarefa.")
+    LOG.info("Checklists coletados: tarefas=%d passos=%d", len(ids), len(frame))
+    return frame.sort_values(["id", "step_order"]).reset_index(drop=True)
 
-    # Filtrando do checklist
-    mask = df_banco["tarefa__nome"].isin(checklist)
-    print(f"[Filtro] Linhas que batem com checklist: {mask.sum()}")
-    ids_alvos = (
-        df_banco.loc[mask, "tarefa__id"]
-                .dropna()
-                .astype(str)
-                .unique()
-                .tolist()
-    )
-    print(f"[Filtro] IDs únicos para consultar na API: {len(ids_alvos)}")
-    if not ids_alvos:
-        print("[AVISO] Nenhum ID a consultar. Verifique nomes do checklist vs. banco.")
-        return pd.DataFrame(columns=["id","name","order","done"])
 
-    # API
-    linhas = []
-    sem_lista = 0
+def api(engine, *, http=None, token=None):
+    frame = collect(coluna_banco(engine), http=http, token=token)
+    publish_tables(engine, {"cs_check": frame})
+    return frame
 
-    # Busca por tarefa ID para achar checklist
-    for idx, task_id in enumerate(ids_alvos, 1):
-        url = f"https://api.gestta.com.br/core/customer/task/{task_id}"
-        try:
-            resp = requests.get(url, headers=headers, timeout=60)
-            resp.raise_for_status()
-            payload = resp.json()
-        except requests.RequestException as e:
-            print("Falha ao consultar checklist.")
-            continue
-        passos = payload.get("customer_task_steps") or payload.get("data", {}).get("customer_task_steps", [])
-        if not isinstance(passos, list) or len(passos) == 0:
-            sem_lista += 1
-            print(f"[AVISO] task {task_id} sem 'customer_task_steps' ou lista vazia.")
-            continue
-        for p in passos:
-            linhas.append({
-                "id": task_id,
-                "name": p.get("name"),
-                "order": p.get("order"),
-                "done": bool(p.get("done")),
-            })
-
-    # Criação do df final
-    df_api = ( 
-        pd.DataFrame(linhas, columns=["id", "name", "order", "done"])
-          .sort_values(["id", "order"], na_position="last")
-          .reset_index(drop=True)
-    )
-    df_db = df_api.rename(columns={"order": "step_order"}) 
-    df_db.to_sql(
-    "cs_check",
-    con=engine,
-    schema="public",
-    if_exists="replace",
-    index=False,
-    method="multi",
-    dtype={
-        "id": String(24),
-        "name": Text(),
-        "step_order": Integer(),
-        "done": Boolean(),
-    },
-    )
-    
-    # Resumo
-    print(f"[Resumo] Tasks consultadas: {len(ids_alvos)} | sem steps: {sem_lista}")
-    print(f"[Resumo] Linhas coletadas: {len(df_api)} | Tasks únicas no DF: {df_api['id'].nunique()}")
-
-    return df_api
 
 def main():
-    engine = conectar_banco()
-    df_banco = coluna_banco(engine)
-    df_api = api(engine)
+    engine = create_engine(database_url(), pool_pre_ping=True)
+    try:
+        with pipeline_lock(engine):
+            api(engine)
+    except Exception:
+        raise ETLError("Carga CS falhou; nenhuma carga parcial foi aprovada.") from None
+    finally:
+        engine.dispose()
+
+
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     main()
-
-
-# In[ ]:

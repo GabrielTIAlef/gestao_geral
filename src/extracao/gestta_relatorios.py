@@ -1,164 +1,74 @@
+"""Coleta Gestta completa; importar este módulo não executa integrações."""
+from datetime import date
+import logging
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from security_config import configured_path, database_url, gestta_token, required_env
-
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
-import requests
-import json
-import os
 import pandas as pd
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
-import logging
-from pathlib import Path
-from dotenv import load_dotenv
+from etl_support import ETLError, discard, notify, publish_files, request_json, stage_csv, stage_json
+from security_config import configured_path, gestta_token
 
-load_dotenv()
+LOG = logging.getLogger(__name__)
+URL = "https://api.gestta.com.br/core/customer/task/report"
 
-# Diretório onde salva as tabelas e CSV
-diretorio_log = str(configured_path("DATA_DIR", "data"))
-os.makedirs(diretorio_log, exist_ok=True)
-log_arquivo = os.path.join(diretorio_log, "processo_gestta.log")
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_arquivo, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
 
-# LOG Envio de mensagem ao Slack em caso de erros no Script ou quando algo não roda
-def enviar_mensagem_slack(mensagem):
-    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
-    if not webhook_url:
-        return
-    slack_data = {"text": mensagem}
+def periods(year=None):
+    year = year or date.today().year
+    quarters = (("01-01", "03-31"), ("04-01", "06-30"),
+                ("07-01", "09-30"), ("10-01", "12-31"))
+    return [(f"{y}-{start}", f"{y}-{end}") for y in (year-1, year, year+1)
+            for start, end in quarters]
+
+
+def collect(*, token=None, http=None, requested_periods=None):
+    headers = {"authorization": token if token is not None else gestta_token(),
+               "Content-Type": "application/json"}
+    frames = []
+    selected = periods() if requested_periods is None else list(requested_periods)
+    if not selected:
+        raise ETLError("Gestta: nenhum período selecionado.")
+    for start, end in selected:
+        payload = {"type": "CUSTOMER_TASK", "filter": "CURRENT_MONTH",
+                   "dates": {"startDate": f"{start}T00:00:00-03:00",
+                             "endDate": f"{end}T23:59:59-03:00"}}
+        data = request_json("post", URL, http=http, headers=headers, json=payload)
+        if isinstance(data, dict) and (data.get("has_more") is True or data.get("next_cursor")):
+            raise ETLError("Gestta: resposta indica paginação; contrato completo necessário antes da carga.")
+        if isinstance(data, dict) and "data" in data:
+            data = data["data"]
+        if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+            raise ETLError("Gestta: contrato de resposta inesperado.")
+        if data:
+            frames.append(pd.json_normalize(data))
+        LOG.info("Extração Gestta: período=%s/%s linhas=%d", start, end, len(data))
+    if not frames:
+        raise ETLError("Gestta: lote total vazio; última versão preservada.")
+    return pd.concat(frames, ignore_index=True)
+
+
+def export(frame):
+    from transformacao.PBI_OS import transformar_gestta
+    transformar_gestta(frame)  # Validar antes de tocar os arquivos publicados.
+    files = []
     try:
-        response = requests.post(
-            webhook_url, data=json.dumps(slack_data),
-            headers={'Content-Type': 'application/json'}, timeout=15
-        )
-        if response.status_code != 200:
-            logging.error("Falha no Slack: HTTP %s", response.status_code)
-    except Exception as e:
-        logging.error("Falha ao enviar alerta ao Slack.")
+        files.append(stage_csv(frame, configured_path("GESTTA_CSV_PATH", "data/gestta_relatorios.csv")))
+        files.append(stage_json(frame.astype(object).where(frame.notna(), None).to_dict("records"),
+                                configured_path("DATA_DIR", "data") / "gestta_relatorios.json"))
+        publish_files(files)
+    finally:
+        discard(files)
 
-# Conexão ao endpoint "API" do Gestta
-url = "https://api.gestta.com.br/core/customer/task/report"
-# Token necessário para funcionar, se quebrar nada funciona
-TOKEN = gestta_token()
-headers = {
-    "authorization": f"{TOKEN}",
-    "Content-Type": "application/json"
-}
-# Carga dos dados do Gestta em Excel e CSV
-json_arquivo = os.path.join(diretorio_log, "gestta_relatorios.json")
-csv_arquivo = str(configured_path("GESTTA_CSV_PATH", "data/gestta_relatorios.csv"))
-Path(csv_arquivo).parent.mkdir(parents=True, exist_ok=True)
 
-# Montagem dos períodos desejados para puxar relatório 
-ano_atual = datetime.now().year
-ano_anterior = ano_atual - 1
-ano_seguinte = ano_atual + 1
-fuso = "-03:00"
-# Agora só funciona em bloco de período inferior, então precisa dar essa diminuição
-periodos = [
-    (f"{ano_anterior}-01-01", f"{ano_anterior}-03-31"),
-    (f"{ano_anterior}-04-01", f"{ano_anterior}-06-30"),
-    (f"{ano_anterior}-07-01", f"{ano_anterior}-09-30"),
-    (f"{ano_anterior}-10-01", f"{ano_anterior}-12-31"),
-
-    (f"{ano_atual}-01-01", f"{ano_atual}-03-31"),
-    (f"{ano_atual}-04-01", f"{ano_atual}-06-30"),
-    (f"{ano_atual}-07-01", f"{ano_atual}-09-30"),
-    (f"{ano_atual}-10-01", f"{ano_atual}-12-31"),
-
-    (f"{ano_seguinte}-01-01", f"{ano_seguinte}-03-31"),
-    (f"{ano_seguinte}-04-01", f"{ano_seguinte}-06-30"),
-    (f"{ano_seguinte}-07-01", f"{ano_seguinte}-09-30"),
-    (f"{ano_seguinte}-10-01", f"{ano_seguinte}-12-31"),
-]
-
-dados_gerais = []
-
-# Loop sobre cada período
-for inicio, fim in periodos:
-    start_date = f"{inicio}T00:00:00{fuso}"
-    end_date = f"{fim}T23:59:59{fuso}"
-    payload = {
-        "type": "CUSTOMER_TASK",
-        "filter": "CURRENT_MONTH",
-        "dates": {
-            "startDate": start_date,
-            "endDate": end_date
-        }
-    }
-    # Chamada ao Gestta para trazer os dados em cada período
+def main():
     try:
-        logging.info(f"Iniciando requisição {inicio} a {fim}...")
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        # Coleta e normalização dos dados
-        if isinstance(data, list):
-            df = pd.json_normalize(data)
-        else:
-            df = pd.json_normalize(data.get("data", data))
-        if not df.empty:
-            dados_gerais.append(df)
-            logging.info(f"Período {inicio} a {fim} processado")                                                 
-        else:
-            logging.warning(f"Nenhum dado para o período {inicio} a {fim}.")
-    except requests.exceptions.RequestException as err:
-        msg = "Falha na requisição Gestta."
-        logging.error(msg)
-        # LOG de erro no Slack
-        enviar_mensagem_slack("Falha na extração Gestta.")
-    except Exception as e:
-        msg = "Falha no processamento Gestta."
-        logging.error(msg)
-        enviar_mensagem_slack("Falha no processamento Gestta.")
-
-# Salvando os dados consolidados
-if dados_gerais:
-    df_final = pd.concat(dados_gerais, ignore_index=True)
-    df_final.to_csv(csv_arquivo, index=False, encoding="utf-8-sig")
-    with open(json_arquivo, "w", encoding="utf-8") as f:
-        json.dump(df_final.to_dict(orient="records"), f, ensure_ascii=False, indent=2)
-    logging.info("Dados salvos")
-else:
-    msg = "⚠️ Script Gestta executado, mas nenhum dado foi coletado em nenhum período."
-    logging.warning(msg)
-    enviar_mensagem_slack(msg)
+        export(collect())
+        LOG.info("Extração Gestta concluída. Execute pipeline.py para a carga coordenada.")
+    except Exception:
+        notify("Falha na extração Gestta; publicação interrompida.")
+        raise ETLError("Extração Gestta falhou; nenhuma etapa seguinte foi iniciada.") from None
 
 
-# In[2]:
-
-
-# Chama outro script para dar sequência
-import subprocess
-subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "transformacao/PBI_OS.py")], check=True)
-
-
-# In[3]:
-
-
-# Chama outro script para dar sequência
-import subprocess
-subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "automacao/RPA_Gestao_Atividades.py")], check=True)
-
-
-# In[6]:
-
-
-# Chama outro script para dar sequência
-import subprocess
-subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "automacao/RPA_Gestao_Supervisores.py")], check=True)
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    main()
