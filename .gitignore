@@ -28,5 +28,8 @@ logs/
 __pycache__/
 *.py[cod]
 .venv/
+.venv*/
 venv/
 .test-deps/
+.local-test/
+!docs/evidence/etapa3_resultado.json
