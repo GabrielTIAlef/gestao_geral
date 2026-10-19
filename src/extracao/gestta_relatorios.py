@@ -1,3 +1,9 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from security_config import configured_path, database_url, gestta_token, required_env
+
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -17,7 +23,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Diretório onde salva as tabelas e CSV
-diretorio_log = r"[CAMINHO_REMOVIDO]"
+diretorio_log = str(configured_path("DATA_DIR", "data"))
 os.makedirs(diretorio_log, exist_ok=True)
 log_arquivo = os.path.join(diretorio_log, "processo_gestta.log")
 logging.basicConfig(
@@ -31,29 +37,32 @@ logging.basicConfig(
 
 # LOG Envio de mensagem ao Slack em caso de erros no Script ou quando algo não roda
 def enviar_mensagem_slack(mensagem):
-    webhook_url = os.getenv("webhook_url")
+    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+    if not webhook_url:
+        return
     slack_data = {"text": mensagem}
     try:
         response = requests.post(
             webhook_url, data=json.dumps(slack_data),
-            headers={'Content-Type': 'application/json'}
+            headers={'Content-Type': 'application/json'}, timeout=15
         )
         if response.status_code != 200:
-            logging.error(f"Erro: {response.status_code}, {response.text}")
+            logging.error("Falha no Slack: HTTP %s", response.status_code)
     except Exception as e:
-        logging.error(f"Erro: {e}")
+        logging.error("Falha ao enviar alerta ao Slack.")
 
 # Conexão ao endpoint "API" do Gestta
 url = "https://api.gestta.com.br/core/customer/task/report"
 # Token necessário para funcionar, se quebrar nada funciona
-TOKEN = Path(r"[CAMINHO_REMOVIDO]").read_text(encoding="utf-8").strip()
+TOKEN = gestta_token()
 headers = {
     "authorization": f"{TOKEN}",
     "Content-Type": "application/json"
 }
 # Carga dos dados do Gestta em Excel e CSV
 json_arquivo = os.path.join(diretorio_log, "gestta_relatorios.json")
-csv_arquivo = os.path.join(diretorio_log, "gestta_relatorios.csv")
+csv_arquivo = str(configured_path("GESTTA_CSV_PATH", "data/gestta_relatorios.csv"))
+Path(csv_arquivo).parent.mkdir(parents=True, exist_ok=True)
 
 # Montagem dos períodos desejados para puxar relatório 
 ano_atual = datetime.now().year
@@ -95,7 +104,7 @@ for inicio, fim in periodos:
     # Chamada ao Gestta para trazer os dados em cada período
     try:
         logging.info(f"Iniciando requisição {inicio} a {fim}...")
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
         response.raise_for_status()
         data = response.json()
         # Coleta e normalização dos dados
@@ -109,14 +118,14 @@ for inicio, fim in periodos:
         else:
             logging.warning(f"Nenhum dado para o período {inicio} a {fim}.")
     except requests.exceptions.RequestException as err:
-        msg = f"Erro na requisição ({inicio} a {fim}): {err}"
+        msg = "Falha na requisição Gestta."
         logging.error(msg)
         # LOG de erro no Slack
-        enviar_mensagem_slack(f"ERRO no script Gestta ({inicio} a {fim}): {err}")
+        enviar_mensagem_slack("Falha na extração Gestta.")
     except Exception as e:
-        msg = f"Erro ao processar período ({inicio} a {fim}): {e}"
+        msg = "Falha no processamento Gestta."
         logging.error(msg)
-        enviar_mensagem_slack(f"ERRO no processamento do script Gestta ({inicio} a {fim}): {e}")
+        enviar_mensagem_slack("Falha no processamento Gestta.")
 
 # Salvando os dados consolidados
 if dados_gerais:
@@ -136,7 +145,7 @@ else:
 
 # Chama outro script para dar sequência
 import subprocess
-subprocess.run(['python', r'[CAMINHO_REMOVIDO]'])
+subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "transformacao/PBI_OS.py")], check=True)
 
 
 # In[3]:
@@ -144,7 +153,7 @@ subprocess.run(['python', r'[CAMINHO_REMOVIDO]'])
 
 # Chama outro script para dar sequência
 import subprocess
-subprocess.run(['python', r'[CAMINHO_REMOVIDO]'])
+subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "automacao/RPA_Gestao_Atividades.py")], check=True)
 
 
 # In[6]:
@@ -152,5 +161,4 @@ subprocess.run(['python', r'[CAMINHO_REMOVIDO]'])
 
 # Chama outro script para dar sequência
 import subprocess
-subprocess.run(['python', r'[CAMINHO_REMOVIDO]'])
-
+subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "automacao/RPA_Gestao_Supervisores.py")], check=True)

@@ -1,3 +1,9 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from security_config import configured_path, database_url, gestta_token, required_env
+
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -21,9 +27,9 @@ load_dotenv()
 
 # Conexão ao Notion API
 load_dotenv()
-NOTION_TOKEN = os.getenv("NOTION_TOKEN")
-NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
-PG_DSN = "postgresql+psycopg2://postgres:[CREDENCIAL_REMOVIDA]@localhost:5432/ProjetoImport"
+NOTION_TOKEN = required_env("NOTION_TOKEN")
+NOTION_DATABASE_ID = required_env("NOTION_DATABASE_ID")
+PG_DSN = database_url()
 PG_TABLE = "notion_folha"
 # Extração dos dados Notion
 VISIBLE_COLUMNS = [
@@ -43,9 +49,9 @@ VISIBLE_COLUMNS = [
 # Transformação valores data
 DATE_COLUMNS = ["Primeira Competência"]
 
-assert NOTION_TOKEN, "Missing NOTION_TOKEN"
-assert NOTION_DATABASE_ID, "Missing NOTION_DATABASE_ID"
-assert PG_DSN, "Missing PG_DSN"
+
+
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -164,7 +170,7 @@ def fetch_notion_database() -> List[Dict[str, Any]]:
             payload["start_cursor"] = next_cursor
         resp = requests.post(QUERY_URL, headers=HEADERS, json=payload, timeout=60)
         if resp.status_code != 200:
-            raise RuntimeError(f"Notion API error {resp.status_code}: {resp.text}")
+            raise RuntimeError(f"Notion API error: HTTP {resp.status_code}")
         data = resp.json()
         results.extend(data.get("results", []))
         has_more = data.get("has_more", False)
@@ -246,19 +252,15 @@ def main():
             c.execute(text("SELECT 1;"))
     except OperationalError:
         logging.error("Falha ao conectar no Postgres. Verifique PG_DSN.")
-        raise
+        raise RuntimeError("Execução interrompida; verifique a configuração e o serviço.") from None
 
     pages = fetch_notion_database()
     df = normalize_visible_only(pages, VISIBLE_COLUMNS)
-    logging.info("DF shape=%s cols=%s", df.shape, list(df.columns))
+    logging.info("Linhas normalizadas: %d", len(df))
 
-    # debug rápido (opcional): conferir exemplos das 2 colunas problemáticas
-    try:
-        logging.info("Exemplo Gestão de Clientes: %s", df["Gestão de Clientes"].head(5).tolist())
-        logging.info("Exemplo 1ª Competência DEMO: %s", df["1ª Competência DEMO"].head(5).tolist())
-    except Exception:
-        pass
-
+    csv_path = configured_path("NOTION_CSV_PATH", "data/notion_dados.csv")
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     ensure_table_and_columns(engine, PG_TABLE, df)
     replace_dataframe(engine, PG_TABLE, df)
     logging.info("REPLACE concluído: %d linhas em %s", len(df), PG_TABLE)
@@ -268,7 +270,3 @@ if __name__ == "__main__":
 
 
 # In[ ]:
-
-
-
-

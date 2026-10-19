@@ -276,13 +276,9 @@ gestao-geral-bi/
 
 # Segurança
 
-Para publicação pública deste projeto:
-
-- Tokens foram removidos;
-- Credenciais foram ocultadas;
-- Webhooks foram sanitizados;
-- Dados reais foram substituídos por exemplos;
-- Informações sensíveis não foram incluídas.
+A configuração deve ser fornecida por variáveis de ambiente, conforme `.env.example`.
+Nenhum segredo deve ser incluído em arquivos versionados. Consulte [SECURITY.md](SECURITY.md)
+para configuração, revogação de credenciais previamente expostas e limites desta correção.
 
 ---
 

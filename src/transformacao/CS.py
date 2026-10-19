@@ -1,3 +1,9 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from security_config import configured_path, database_url, gestta_token, required_env
+
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -14,13 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 # Conexão ao BD
-DB_CONFIG = {
-    "usuario": "postgres",
-    "senha": "[CREDENCIAL_REMOVIDA]",
-    "host": "localhost",
-    "porta": "5432",
-    "banco": "ProjetoImport"
-}
+
 
 # Tarefas específicas do CS
 checklist = [
@@ -39,19 +39,18 @@ checklist = [
 ]
 
 # Token de conexão ao Gestta
-TOKEN = Path(r"[CAMINHO_REMOVIDO]").read_text(encoding="utf-8").strip()
+TOKEN = gestta_token()
 
 # Conexão e extração de dados do BD
 def conectar_banco():
-    url = f"postgresql+psycopg2://{DB_CONFIG['usuario']}:{DB_CONFIG['senha']}@{DB_CONFIG['host']}:{DB_CONFIG['porta']}/{DB_CONFIG['banco']}"
-    engine = create_engine(url)
+    engine = create_engine(database_url())
     try:
         with engine.connect() as conn:
             print("✅ Conexão bem-sucedida ao banco de dados.")
         return engine
     except Exception as e:
-        print(f"❌ Erro ao conectar: {e}")
-        raise     
+        print("Falha na conexão ao banco.")
+        raise RuntimeError("Execução interrompida; verifique a configuração e o serviço.") from None
 def coluna_banco(engine):
     with engine.connect() as conn:
         df_banco = pd.read_sql(
@@ -98,7 +97,7 @@ def api(engine):
             resp.raise_for_status()
             payload = resp.json()
         except requests.RequestException as e:
-            print(f"[ERRO] task {task_id}: {e}")
+            print("Falha ao consultar checklist.")
             continue
         passos = payload.get("customer_task_steps") or payload.get("data", {}).get("customer_task_steps", [])
         if not isinstance(passos, list) or len(passos) == 0:
@@ -150,7 +149,3 @@ if __name__ == "__main__":
 
 
 # In[ ]:
-
-
-
-
