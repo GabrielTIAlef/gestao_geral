@@ -1,3 +1,9 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from security_config import configured_path, database_url, gestta_token, required_env
+
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -19,16 +25,16 @@ load_dotenv()
 
 # LOG quando der erro manda mensagem no Slack
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
-DATASET_NAME = "PBI_Gestao_Atividades"
+DATASET_NAME = required_env("POWERBI_DATASET_ATIVIDADES")
 def send_slack(msg):
     if not SLACK_WEBHOOK_URL: 
         print(msg); return
     try: requests.post(SLACK_WEBHOOK_URL, json={"text": msg}, timeout=10)
-    except Exception as e: print("Slack erro:", e, file=sys.stderr)
+    except requests.RequestException: print("Falha no envio ao Slack.", file=sys.stderr)
 
 # Perfil EXCLUSIVO da RPA
-USER_DATA_DIR = r"[CAMINHO_REMOVIDO]"
-PROFILE_DIR = "Default"
+USER_DATA_DIR = str(configured_path("CHROME_USER_DATA_DIR"))
+PROFILE_DIR = required_env("CHROME_PROFILE_DIR")
 # Caminho do Chrome dedicado
 CHROME_BINARY = os.getenv("CHROME_BINARY", "").strip()
 os.makedirs(USER_DATA_DIR, exist_ok=True)
@@ -44,7 +50,6 @@ opts.add_argument("--no-first-run")
 opts.add_argument("--no-default-browser-check")
 opts.add_argument("--disable-blink-features=AutomationControlled")
 opts.add_argument("--disable-dev-shm-usage")
-opts.add_argument("--remote-allow-origins=*")
 opts.add_argument("--start-maximized")
 # Em produção rode headless:
 opts.add_argument("--headless=new")
@@ -80,14 +85,14 @@ try:
             continue
 
     if not found:
-        send_slack(f"❌ Dataset '{DATASET_NAME}' não encontrado/sem botão 'Atualizar agora'.")
+        send_slack("Dataset não encontrado ou atualização indisponível.")
     time.sleep(5)
 
 except TimeoutException:
     send_slack("❌ Timeout ao carregar itens do Power BI. Verifique login nesse perfil da RPA.")
 except Exception as e:
-    send_slack(f"❌ Erro geral na RPA Power BI: {e}")
-    raise
+    send_slack("Falha na atualização do Power BI.")
+    raise RuntimeError("Execução interrompida; verifique a configuração e o serviço.") from None
 finally:
     try: 
         if driver: driver.quit()
@@ -96,7 +101,3 @@ finally:
 
 
 # In[ ]:
-
-
-
-
