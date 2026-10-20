@@ -2,26 +2,118 @@
 
 [![Testes Python e PostgreSQL](https://github.com/GabrielTIAlef/gestao_geral/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/GabrielTIAlef/gestao_geral/actions/workflows/tests.yml)
 
-Pipeline de dados operacionais em **Python e PostgreSQL**: integra tarefas e
-cadastros de clientes, valida as fontes e publica tabelas, views SQL e arquivos
-para análise. Inclui demonstração com dados fictícios, testes de falhas e
-integração contínua.
+Solução de integração de dados e **Business Intelligence operacional**, desenvolvida
+em contexto empresarial com Python, PostgreSQL, Gestta, Notion, Power BI e RPA.
+Apoia o acompanhamento de tarefas, equipes, onboarding e fluxos operacionais.
+
+A versão pública reúne um pipeline confiável, demonstração com dados fictícios,
+testes de falhas e integração contínua. Este README apresenta tanto a experiência
+corporativa original quanto o que pode ser reproduzido e verificado no repositório.
 
 Esta versão pública utiliza nomes de etapas, filtros e registros demonstrativos.
 É possível avaliar o ETL sem contas de Gestta, Notion, Slack ou Power BI.
 
-## Problema e objetivo
+## Origem e contexto empresarial
+
+O projeto nasceu para centralizar e automatizar dados operacionais de uma
+empresa contábil. A operação acompanhava milhares de tarefas e processos
+diariamente, com informações distribuídas entre Gestta, Notion e rotinas de
+acompanhamento manual.
+
+A implantação integrou Python, PostgreSQL, APIs REST, Power BI e automação de
+navegador para apoiar a gestão de tarefas, equipes, onboarding de clientes e
+monitoramento de fluxos operacionais.
+
+Os desafios atendidos incluíam a demora na atualização dos painéis, a dependência
+de planilhas manuais, a dificuldade de visualizar gargalos e a necessidade de
+oferecer uma visão consolidada com baixo custo operacional. A disponibilidade das
+interfaces de integração na implantação original também exigiu adequar as
+coletas às necessidades da operação.
+
+### Processos e integrações da implantação original
+
+| Componente | Aplicação no contexto empresarial |
+| --- | --- |
+| Gestta | Coleta de tarefas, responsáveis, status, prazos e etapas de checklist. |
+| Notion | Integração dos cadastros e propriedades associados aos clientes e ao onboarding. |
+| Python e pandas | Extração, normalização, tratamento de datas e consolidação das bases. |
+| PostgreSQL e SQL | Centralização relacional e views para consumo analítico. |
+| Power BI e DAX | Modelagem analítica, indicadores e dashboards operacionais. |
+| Selenium / RPA | Automação de interações no Power BI Web para solicitar atualizações. |
+| Slack Webhooks | Alertas operacionais e de falhas do processamento. |
+| Windows Task Scheduler | Agendamento das rotinas no ambiente da implantação original. |
+
+A descrição acima recupera a experiência corporativa do projeto. Arquivos de
+dashboard, medidas DAX, agendamentos, sessões autenticadas e configurações da
+empresa não fazem parte da distribuição pública. A documentação atual usa os
+nomes reais dos módulos publicados, apresentados mais adiante.
+
+## Dashboards e indicadores utilizados na operação
+
+Na implantação corporativa foram desenvolvidos os seguintes painéis:
+
+| Dashboard | Finalidade | Indicadores e análises |
+| --- | --- | --- |
+| Operacional | Acompanhar tarefas, equipes e execução da operação. | Quantidade de tarefas, status, SLA, produtividade, desempenho individual e por setor, evolução temporal e atrasos. |
+| Atendimento | Acompanhar demandas e o fluxo de trabalho do atendimento. | Volume e criação de demandas, tempo de resposta, fluxo operacional e acompanhamento da equipe. |
+| Apuração | Acompanhar etapas dos processos fiscais e operacionais. | Status das etapas, fluxos pendentes, processos críticos e gargalos. |
+
+O acompanhamento de onboarding e checklists apoiava a identificação de etapas
+pendentes e gargalos na entrada de clientes.
+
+Esses painéis e indicadores integram a história profissional da solução. A versão
+pública preserva a preparação dos dados e views demonstrativas; não contém
+`.pbix`, medidas DAX nem capturas dos painéis corporativos. Suas regras,
+denominadores e metas empresariais não são reconstruídos com dados confidenciais.
+
+## Resultados observados no ambiente corporativo
+
+Os resultados abaixo foram descritos no README original e confirmados pelo autor
+como observados na implantação corporativa. O escopo é o fluxo atendido pela
+solução; os números não são um benchmark da demonstração pública.
+
+| Aspecto | Antes | Depois da implantação |
+| --- | --- | --- |
+| Atualização dos painéis | 5 dias | Menos de 5 minutos |
+| Dependência de planilhas manuais no fluxo atendido | Alta | Eliminada |
+| Centralização das fontes atendidas | Parcial | Completa no escopo da solução |
+| Atualização operacional | Manual | Automatizada |
+| Monitoramento de erros | Limitado | Alertas via Slack |
+
+A comparação de atualização se refere ao resultado observado na operação,
+conforme relato do autor. Não equivale a uma garantia de tempo de execução do
+ETL público ou à confirmação automática de conclusão de refresh no Power BI.
+Logs corporativos e medições comparativas não são publicados neste repositório.
+
+## O que esta versão pública permite comprovar
+
+A experiência corporativa explica o problema de negócio, os dashboards e o impacto
+profissional. O repositório público oferece uma implementação adaptada para
+avaliação técnica, com dados fictícios, testes e instruções de reprodução.
+
+| Camada | O que é apresentado | Evidência disponível |
+| --- | --- | --- |
+| Experiência corporativa | Contexto, processos, dashboards e resultados observados. | Relato profissional do autor, recuperado do README original. |
+| Versão pública | Coletores e transformações adaptados, transações, views, arquivos, validações e tratamento de falhas. | Código publicado e testes com respostas HTTP simuladas. |
+| Demonstração reproduzível | Fluxo com dados sintéticos e PostgreSQL real descartável. | Amostra gerada, saídas e registros de validação. |
+| Integração contínua | Execução automatizada dos testes no GitHub. | Workflow e histórico de execuções do GitHub Actions. |
+
+As melhorias de engenharia acrescentadas à versão pública são descritas abaixo.
+Elas não significam que a implantação corporativa tenha sido novamente
+homologada ou que todos os seus dashboards sejam reproduzidos pela amostra.
+
+## Objetivo técnico da versão pública
 
 Dados distribuídos entre ferramentas dificultam relacionar tarefas e clientes e
 construir uma base analítica consistente. O projeto centraliza essas fontes em
 um fluxo de extração, transformação e carga, com validações antes de substituir
 os dados publicados.
 
-O foco desta entrega é a confiabilidade da base para BI. O repositório não
-inclui arquivos `.pbix`, medidas DAX ou capturas de dashboards. Não apresenta
-métricas comprovadas de economia de tempo ou desempenho produtivo.
+O foco técnico da versão pública é a confiabilidade da base para BI. O código
+permite avaliar a integração e a publicação dos dados sem restaurar os artefatos
+ou as configurações privadas da implantação original.
 
-## Arquitetura
+## Arquitetura da versão pública
 
 ```mermaid
 flowchart TD
@@ -138,8 +230,8 @@ revisão de segurança.
 
 ## Limites conhecidos
 
-- APIs reais e navegador autenticado não foram homologados nesta versão
-  pública; as evidências usam respostas simuladas e dados fictícios.
+- A validação da versão pública não acessou APIs corporativas nem navegador
+  autenticado; as evidências usam respostas simuladas e dados fictícios.
 - A automação Power BI solicita atualização, sem confirmar sua conclusão.
 - A publicação de arquivos pode falhar após o commit do banco. O erro informa
   essa condição; o leitor de snapshots verifica manifesto e hashes.
@@ -152,8 +244,14 @@ revisão de segurança.
 
 ## Competências demonstradas
 
-Integração de APIs REST, pandas, SQL analítico, PostgreSQL transacional,
-modelagem de chaves e tipos, testes com mocks e banco real, configuração por
-ambiente e integração contínua. O projeto demonstra uma base de engenharia
-analítica e BI; não implementa modelos preditivos ou experimentos de ciência
-de dados.
+Na implantação corporativa: tradução de necessidades operacionais em integrações,
+indicadores, dashboards e rotinas automatizadas para apoiar a gestão de equipes
+e processos.
+
+Na versão pública: integração de APIs REST, pandas, SQL analítico, PostgreSQL
+transacional, modelagem de chaves e tipos, testes com mocks e banco real,
+configuração por ambiente e integração contínua.
+
+O conjunto apresenta competências de Análise de Dados, BI Pleno e Analytics
+Engineering, combinando compreensão do negócio e confiabilidade da entrega
+analítica. Não implementa modelos preditivos ou experimentos de ciência de dados.
