@@ -2,16 +2,18 @@
 
 [![Testes Python e PostgreSQL](https://github.com/GabrielTIAlef/gestao_geral/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/GabrielTIAlef/gestao_geral/actions/workflows/tests.yml)
 
-Solução de integração de dados e **Business Intelligence operacional**, desenvolvida
-em contexto empresarial com Python, PostgreSQL, Gestta, Notion, Power BI e RPA.
-Apoia o acompanhamento de tarefas, equipes, onboarding e fluxos operacionais.
+Tarefas, cadastros e controles manuais distribuídos dificultavam a visão da
+operação. Este projeto apresenta minha experiência com
+**integração de dados e BI em uma empresa contábil**, conectando Gestta, Notion,
+PostgreSQL e Power BI para acompanhar equipes, prazos e processos.
 
-A versão pública reúne um pipeline confiável, demonstração com dados fictícios,
-testes de falhas e integração contínua. Este README apresenta tanto a experiência
-corporativa original quanto o que pode ser reproduzido e verificado no repositório.
+O caso reúne o problema enfrentado, a solução construída e os resultados
+relatados na operação. Código, dados fictícios e testes permitem examinar as
+decisões técnicas sem depender de acesso à empresa.
 
-Esta versão pública utiliza nomes de etapas, filtros e registros demonstrativos.
-É possível avaliar o ETL sem contas de Gestta, Notion, Slack ou Power BI.
+**Para conhecer meu trabalho:** comece pelo contexto, pelos dashboards e pelo
+resultado observado. Depois, a implementação pública mostra como relaciono
+fontes, trato inconsistências e preparo uma base confiável para análise.
 
 ## Origem e contexto empresarial
 
@@ -85,6 +87,25 @@ conforme relato do autor. Não equivale a uma garantia de tempo de execução do
 ETL público ou à confirmação automática de conclusão de refresh no Power BI.
 Logs corporativos e medições comparativas não são publicados neste repositório.
 
+## Minha atuação e o raciocínio da solução
+
+O trabalho apresentado conecta três responsabilidades: compreender o que a
+gestão precisava acompanhar, preparar os dados das fontes e organizar seu
+consumo em indicadores e dashboards. Na versão pública, as decisões de
+confiabilidade tornam esse processo inspecionável.
+
+| Problema enfrentado | Decisão no projeto | O que essa decisão demonstra |
+| --- | --- | --- |
+| Tarefas e cadastros estavam em ferramentas diferentes | Relacionar as fontes pelo código do cliente e consolidá-las no PostgreSQL | Integração de APIs, entendimento das chaves e preparação de dados para BI |
+| Era necessário enxergar execução, atrasos e etapas pendentes | Organizar dados para os painéis operacional, atendimento e apuração | Tradução de necessidades de gestão em acompanhamento analítico |
+| Uma extração incompleta poderia distorcer a visão da operação | Interromper lotes inválidos antes da publicação | Qualidade de dados aplicada à credibilidade dos indicadores |
+| Uma tarefa sem cadastro não deveria desaparecer da análise | Preservá-la com `LEFT JOIN` e registrar a ausência de correspondência | Raciocínio sobre joins, cobertura e reconciliação |
+
+Para aprofundar a avaliação, [o pipeline](src/pipeline.py) mostra a coordenação
+das etapas e [a transformação](src/transformacao/PBI_OS.py) mostra como a base
+analítica é preparada. Os testes sustentam essas escolhas; o resultado de
+negócio pertence ao contexto corporativo descrito acima.
+
 ## O que esta versão pública permite comprovar
 
 A experiência corporativa explica o problema de negócio, os dashboards e o impacto
@@ -147,6 +168,9 @@ A integração principal usa `LEFT JOIN` das tarefas com o cadastro Notion pelo
 código do cliente. Exige chave única no cadastro e mantém tarefas sem
 correspondência, registrando sua contagem.
 
+<details>
+<summary>Reproduzir a demonstração e inspecionar as saídas</summary>
+
 ## Demonstração local
 
 Pré-requisitos deste roteiro: **Windows, Python 3.12 e binários portáteis do
@@ -171,6 +195,8 @@ A demonstração contém **5 tarefas, 2 clientes na fonte Notion e 4 itens de
 checklist**, incluindo uma tarefa sem cadastro correspondente. Gera em
 `data/demo/`: `gestta.csv`, `notion.csv`, `gestta.json`, `resultado.xlsx` e
 `latest_run.json`. Esses arquivos e o cluster local são ignorados pelo Git.
+
+</details>
 
 ## Testes e evidências
 
